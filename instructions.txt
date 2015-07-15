@@ -1,0 +1,13 @@
+#We downloaded some stuff from https://baltimore2006to2010acsprofiles.wordpress.com/ that we wanted to parse into a csv of selective data points.
+
+#Our PHP script will do the actual parsing, but first, we have to convert our pdf files to txt files. So I type the following commands:
+
+brew install xpdf
+
+for file in *.pdf; do pdftotext "$file" "$file.txt"; done 
+
+#^That's from http://askubuntu.com/questions/211870/how-to-convert-all-pdf-files-to-text-within-a-folder-with-one-command
+
+
+
+
