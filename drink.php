@@ -1,5 +1,7 @@
 <?php
 
+//For full code and context: https://github.com/borpglass/neighborhood-data-parser
+
 //Make the script not conk out as it guzzles pdfs
 ini_set('memory_limit', '512M');
 //Instantiate our pdfdrinker objet
@@ -7,13 +9,19 @@ $drinker = new pdfdrinker;
 //Tell the pdfdrinker where to find its files
 $files = $drinker->getfilelist(getcwd(),'.pdf.txt');
 //Get a big recursive array of all our pdf data. Each file should be read from the start through the string "AGE 0"
-$bigarray = $drinker->makebigsoda($files,"","AGE 0");
-//Do some custom stuff to get just the bits we want. (See custom function below for detailed logic.)
-$bigarray = customclean($bigarray);
+$racearray = $drinker->makebigsoda($files,"","AGE 0");
+//Do some custom stuff to get just the race stats we want. (See custom function below for detailed logic.)
+$racearray = customclean($racearray,'race');
+//Now do some more stuff to get age stats. 
+$agearray = $drinker->makebigsoda($files,"","Family Household Type");
+$agearray = customclean($agearray,'age');
 
-//print_r($bigarray);
 
-//Dump it all to a csv
+$bigarray = joincleaned($racearray,$agearray);
+
+print("\n\nYup.\n\n");
+print_r($bigarray);
+
 
 $csvpointer = fopen('output.csv','w');
 fwrite($csvpointer,implode(',',array_keys($bigarray[0]))."\n");
@@ -28,35 +36,76 @@ fclose($csvpointer);
 
 //This if a one-off function for a specific use case, unlike the reusable pdfdrinker functions.
 //It returns a nicely formatted array of racial (and maybe eventually other demographic) info for each place/pdf. 
-function customclean($input){
-	$output = array();
-	foreach($input as $k=>$v){
-		$better = trim($v);
-		if(strpos($better,'TOTAL POPULATION') !== false){
-			$temporary[] = $better;
+function customclean($input,$type){
+	if($type == 'race'){
+		$output = array();
+		foreach($input as $k=>$v){
+			$better = trim($v);
+			if(strpos($better,'TOTAL POPULATION') !== false){
+				$temporary[] = $better;
+			}
+		}
+		foreach($temporary as $k=>$v){
+			$bigchunks = explode('TOTAL POPULATION',$v);
+			$firstchunkrows = explode("\n",$bigchunks[0]);
+			$bigchunks[0] = trim($firstchunkrows[0]);
+			//if($bigchunks[0] == 'Sandtown-Winchester' || $bigchunks[0] == 'Perkins Homes' || $bigchunks[0] == 'Morgan State University'){
+			//print_r($bigchunks);
+				$output[$k]['neighborhood-statistical-area'] = trim($bigchunks[0]);
+				$asoneline = preg_replace('/\n/msi', ' ', $bigchunks[2]);
+				preg_match_all('/[0-9,-.]+\s/',$asoneline,$racechunks);	
+				$output[$k]['twenty-ten-overall-population'] = $racechunks[0][0];
+				$output[$k]['twenty-ten-white-percentage'] = $racechunks[0][8];
+				$output[$k]['twenty-ten-black-percentage'] = $racechunks[0][9];
+				$output[$k]['twenty-ten-american-indian-percentage'] = $racechunks[0][10];
+				$output[$k]['twenty-ten-asian-percentage'] = $racechunks[0][11];
+				$output[$k]['twenty-ten-other-percentage'] = $racechunks[0][12];
+				$output[$k]['twenty-ten-mixed-percentage'] = $racechunks[0][13];
+				$output[$k]['twenty-ten-hispanic-percentage'] = $racechunks[0][14];
+			//}
+		}
+	}elseif($type == 'age'){
+		$output = array();
+		foreach($input as $k=>$v){
+			$better = trim($v);
+			if(strpos($better,'4 Years 5') !== false){
+				$temporary[] = $better;
+			}
+		}
+//print_r($temporary);
+		foreach($temporary as $k=>$v){
+			$bigchunks = explode('Years 65+ Years',$v);
+			$hoodname = explode('SUBJECT',$bigchunks[0]);
+			$hoodname = str_replace('2000 Census','',$hoodname[0]);
+			$hoodname = trim($hoodname);
+			$asoneline = preg_replace('/\n/msi', ' ', $bigchunks[2]);
+			preg_match_all('/[0-9,-.]+\s/',$asoneline,$agechunks);	
+			$output[$k]['neighborhood-statistical-area'] = $hoodname;
+			$output[$k]['twenty-ten-percent-age-0-to-4-years'] = $agechunks[0][1];
+			$output[$k]['twenty-ten-percent-age-5-to-11-years'] = $agechunks[0][5];
+			$output[$k]['twenty-ten-percent-age-12-to-14-years'] = $agechunks[0][9];
+			$output[$k]['twenty-ten-percent-age-15-to-17-years'] = $agechunks[0][13];
+			$output[$k]['twenty-ten-percent-age-18-to-24-years'] = $agechunks[0][17];
+			$output[$k]['twenty-ten-percent-age-25-to-34-years'] = $agechunks[0][21];
+			$output[$k]['twenty-ten-percent-age-35-to-44-years'] = $agechunks[0][25];
+			$output[$k]['twenty-ten-percent-age-45-to-64-years'] = $agechunks[0][29];
+			$output[$k]['twenty-ten-percent-age-65-and-up-years'] = $agechunks[0][33];
+
 		}
 	}
-	foreach($temporary as $k=>$v){
-		$bigchunks = explode('TOTAL POPULATION',$v);
-		$firstchunkrows = explode("\n",$bigchunks[0]);
-		$bigchunks[0] = trim($firstchunkrows[0]);
-		//if($bigchunks[0] == 'Sandtown-Winchester' || $bigchunks[0] == 'Perkins Homes'){
-		//print_r($bigchunks)
-			$output[$k]['neighborhood-statistical-area'] = trim($bigchunks[0]);
-			$asoneline = preg_replace('/\n/msi', ' ', $bigchunks[2]);
-			preg_match_all('/[0-9,-.]+\s/',$asoneline,$smallchunks);	
-			$output[$k]['twenty-ten-overall-population'] = $smallchunks[0][0];
-			$output[$k]['twenty-ten-white-percentage'] = $smallchunks[0][8];
-			$output[$k]['twenty-ten-black-percentage'] = $smallchunks[0][9];
-			$output[$k]['twenty-ten-american-indian-percentage'] = $smallchunks[0][10];
-			$output[$k]['twenty-ten-asian-percentage'] = $smallchunks[0][11];
-			$output[$k]['twenty-ten-other-percentage'] = $smallchunks[0][12];
-			$output[$k]['twenty-ten-mixed-percentage'] = $smallchunks[0][13];
-			$output[$k]['twenty-ten-hispanic-percentage'] = $smallchunks[0][14];
-		//}
+	return($output);
+}
+
+
+
+//This is a one-off function for merging the two arrays generated by the customclean function.
+function joincleaned($arrayone,$arraytwo){
+	foreach($arrayone as $k1=>$v1){
+		$output[$k1] = $v1;
+		foreach($arraytwo[$k1] as $k2=>$v2){
+			$output[$k1][$k2] = $v2;
+		}
 	}
-
-
 	return($output);
 }
 
