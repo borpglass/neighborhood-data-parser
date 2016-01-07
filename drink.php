@@ -4,7 +4,7 @@
 
 //Make the script not conk out as it guzzles pdfs
 ini_set('memory_limit', '512M');
-//Instantiate our pdfdrinker objet
+//Instantiate our pdfdrinker object
 $drinker = new pdfdrinker;
 //Tell the pdfdrinker where to find its files
 $files = $drinker->getfilelist(getcwd(),'.pdf.txt');
